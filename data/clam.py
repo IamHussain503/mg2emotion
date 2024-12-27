@@ -125,7 +125,7 @@ class AudioTextMelodyDataset(Dataset):
         return len(self.captions)
 
     def __getitem__(self, idx):
-        # Logic for fetching data (no changes needed here)
+        # Load audio
         audio_path = os.path.join(self.audio_dir, self.audio_files[idx])
         waveform, sr = torchaudio.load(audio_path)
         if sr != 48000:
@@ -150,10 +150,10 @@ class AudioTextMelodyDataset(Dataset):
         input_ids = text_encoded['input_ids'].squeeze(0)
         attention_mask = text_encoded['attention_mask'].squeeze(0)
 
-        # Process emotion logits
+        # Ensure tensors for emotion processing are on the same device
         with torch.no_grad():
-            emotion_encoded = self.emotion_tokenizer(caption, return_tensors='pt')
-            emotion_logits = self.emotion_model(**emotion_encoded).logits.cpu()
+            emotion_encoded = self.emotion_tokenizer(caption, return_tensors='pt').to(self.emotion_model.device)
+            emotion_logits = self.emotion_model(**emotion_encoded).logits
 
         return {
             'audio_features': audio_features,
@@ -163,6 +163,7 @@ class AudioTextMelodyDataset(Dataset):
             'duration_tokens': duration_tokens,
             'emotion_logits': emotion_logits.squeeze(0),
         }
+
 
     def extract_melody_tokens(self, melody_path):
         import pretty_midi
