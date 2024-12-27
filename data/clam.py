@@ -217,7 +217,6 @@ def main():
     clap_model = AutoModel.from_pretrained("laion/clap-htsat-unfused").to(device)
     tokenizer = processor.tokenizer
     emotion_tokenizer = AutoTokenizer.from_pretrained("nateraw/bert-base-uncased-emotion")
-    global emotion_model
     emotion_model = AutoModelForSequenceClassification.from_pretrained("nateraw/bert-base-uncased-emotion").to(device)
 
     melody_encoder = MelodyEncoder()
@@ -229,9 +228,10 @@ def main():
         captions_file="/root/m2music/data/captions.txt",
         processor=processor,
         tokenizer=tokenizer,
-        emotion_tokenizer=emotion_tokenizer
+        emotion_tokenizer=emotion_tokenizer,
+        emotion_model=emotion_model  # Pass emotion_model here
     )
-    dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=2, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=4)
 
     criterion = ExtendedContrastiveLoss(temperature=0.07)
     optimizer = torch.optim.AdamW(clmp_model.parameters(), lr=3e-4)
@@ -239,7 +239,7 @@ def main():
     checkpoint_dir = "clm_checkpoint"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    num_epochs = 20
+    num_epochs = 10
     for epoch in range(num_epochs):
         avg_loss = train_one_epoch(clmp_model, dataloader, optimizer, criterion, device)
         print(f"Epoch {epoch + 1}, Loss: {avg_loss:.4f}")
@@ -255,3 +255,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
