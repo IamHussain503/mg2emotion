@@ -43,10 +43,11 @@ class CLMPModel(nn.Module):
         audio_hidden = self.audio_model.config.hidden_size
         text_hidden = self.text_model.config.hidden_size
 
+        # Projection layers
         self.audio_proj = nn.Linear(audio_hidden, final_dim)
         self.text_proj = nn.Linear(text_hidden, final_dim)
-        self.melody_proj = nn.Linear(32, final_dim)
-        self.emotion_proj = nn.Linear(7, final_dim)
+        self.melody_proj = nn.Linear(32, final_dim)  # Melody encoder proj_dim = 32
+        self.emotion_proj = nn.Linear(6, final_dim)  # Ensure input dim matches 6 emotion classes
 
     def forward(self, audio_features, input_ids, attention_mask, pitch_tokens, duration_tokens, emotion_logits):
         audio_outputs = self.audio_model(**audio_features)
