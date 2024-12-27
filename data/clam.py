@@ -5,6 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoModel, AutoTokenizer, AutoProcessor, AutoModelForSequenceClassification
+import torch.multiprocessing as mp
+
 
 ###############################################
 # Melody Encoder
@@ -106,7 +108,7 @@ class AudioTextMelodyDataset(Dataset):
         self.processor = processor
         self.tokenizer = tokenizer
         self.emotion_tokenizer = emotion_tokenizer
-        self.emotion_model = emotion_model  # Pass emotion_model here
+        self.emotion_model = emotion_model  # Keep the model reference
         self.max_length = max_length
 
         with open(captions_file, 'r', encoding='utf-8') as f:
@@ -117,12 +119,7 @@ class AudioTextMelodyDataset(Dataset):
 
         assert len(self.captions) == len(self.audio_files) == len(self.melody_files), "Mismatch in data lengths."
 
-    def __len__(self):
-        # Return the total number of samples in the dataset
-        return len(self.captions)
-
     def __getitem__(self, idx):
-        # Implement data fetching logic (unchanged)
         audio_path = os.path.join(self.audio_dir, self.audio_files[idx])
         waveform, sr = torchaudio.load(audio_path)
         if sr != 48000:
@@ -147,9 +144,10 @@ class AudioTextMelodyDataset(Dataset):
         input_ids = text_encoded['input_ids'].squeeze(0)
         attention_mask = text_encoded['attention_mask'].squeeze(0)
 
+        # Process emotion logits on CPU to avoid CUDA errors in subprocesses
         with torch.no_grad():
-            emotion_encoded = self.emotion_tokenizer(caption, return_tensors='pt').to(self.emotion_model.device)
-            emotion_logits = self.emotion_model(**emotion_encoded).logits
+            emotion_encoded = self.emotion_tokenizer(caption, return_tensors='pt')
+            emotion_logits = self.emotion_model(**emotion_encoded).logits.cpu()
 
         return {
             'audio_features': audio_features,
@@ -215,6 +213,7 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device):
     return total_loss / len(dataloader)
 
 def main():
+    mp.set_start_method("spawn", force=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     processor = AutoProcessor.from_pretrained("laion/clap-htsat-unfused")
@@ -235,7 +234,7 @@ def main():
         emotion_tokenizer=emotion_tokenizer,
         emotion_model=emotion_model  # Pass emotion_model here
     )
-    dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=0, pin_memory=True)
 
     criterion = ExtendedContrastiveLoss(temperature=0.07)
     optimizer = torch.optim.AdamW(clmp_model.parameters(), lr=3e-4)
