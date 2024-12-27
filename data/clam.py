@@ -240,7 +240,7 @@ def main():
         emotion_tokenizer=emotion_tokenizer,
         emotion_model=emotion_model  # Pass emotion_model here
     )
-    dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=0, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=0, pin_memory=False)
 
     criterion = ExtendedContrastiveLoss(temperature=0.07)
     optimizer = torch.optim.AdamW(clmp_model.parameters(), lr=3e-4)
