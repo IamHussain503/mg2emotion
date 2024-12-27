@@ -237,7 +237,7 @@ def main():
     checkpoint_dir = "clm_checkpoint"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    num_epochs = 10
+    num_epochs = 20
     for epoch in range(num_epochs):
         avg_loss = train_one_epoch(clmp_model, dataloader, optimizer, criterion, device)
         print(f"Epoch {epoch + 1}, Loss: {avg_loss:.4f}")
