@@ -219,6 +219,38 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device):
 
     return total_loss / len(dataloader)
 
+
+from tqdm import tqdm
+
+def train_one_epoch(model, dataloader, optimizer, criterion, device, epoch):
+    model.train()
+    total_loss = 0
+    progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}", unit="batch")
+    
+    for batch in progress_bar:
+        batch = {k: (v.to(device) if isinstance(v, torch.Tensor) else v) for k, v in batch.items()}
+        audio_features = {k: v.to(device) for k, v in batch['audio_features'].items()}
+        input_ids = batch['input_ids']
+        attention_mask = batch['attention_mask']
+        pitch_tokens = batch['pitch_tokens']
+        duration_tokens = batch['duration_tokens']
+        emotion_logits = batch['emotion_logits']
+
+        optimizer.zero_grad()
+        audio_emb, text_emb, melody_emb, emotion_emb = model(
+            audio_features, input_ids, attention_mask, pitch_tokens, duration_tokens, emotion_logits
+        )
+        loss = criterion(audio_emb, text_emb, melody_emb, emotion_emb)
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        progress_bar.set_postfix(loss=loss.item())
+    
+    progress_bar.close()
+    return total_loss / len(dataloader)
+
+
 def main():
     mp.set_start_method("spawn", force=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -239,7 +271,7 @@ def main():
         processor=processor,
         tokenizer=tokenizer,
         emotion_tokenizer=emotion_tokenizer,
-        emotion_model=emotion_model  # Pass emotion_model here
+        emotion_model=emotion_model
     )
     dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=0, pin_memory=False)
 
@@ -251,18 +283,27 @@ def main():
 
     num_epochs = 10
     for epoch in range(num_epochs):
-        avg_loss = train_one_epoch(clmp_model, dataloader, optimizer, criterion, device)
-        print(f"Epoch {epoch + 1}, Loss: {avg_loss:.4f}")
+        avg_loss = train_one_epoch(clmp_model, dataloader, optimizer, criterion, device, epoch)
+        print(f"Epoch {epoch + 1}, Average Loss: {avg_loss:.4f}")
+
+        # Save checkpoint after each epoch
+        checkpoint_path = os.path.join(checkpoint_dir, f"clmp_epoch_{epoch+1}.pth")
+        torch.save({
+            'epoch': epoch + 1,
+            'model_state_dict': clmp_model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': avg_loss
+        }, checkpoint_path)
+        print(f"Checkpoint saved to {checkpoint_path}")
 
     # Save the final checkpoint
-    final_checkpoint_path = os.path.join(checkpoint_dir, f"clmp_final.pth")
+    final_checkpoint_path = os.path.join(checkpoint_dir, "clmp_final.pth")
     torch.save({
         'model_state_dict': clmp_model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': avg_loss
     }, final_checkpoint_path)
-    print(f"Saved final model checkpoint to {final_checkpoint_path}")
+    print(f"Final model checkpoint saved to {final_checkpoint_path}")
 
 if __name__ == "__main__":
     main()
-
