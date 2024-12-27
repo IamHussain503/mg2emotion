@@ -106,7 +106,7 @@ class AudioTextMelodyDataset(Dataset):
         self.processor = processor
         self.tokenizer = tokenizer
         self.emotion_tokenizer = emotion_tokenizer
-        self.emotion_model = emotion_model  # Pass model directly
+        self.emotion_model = emotion_model  # Pass emotion_model here
         self.max_length = max_length
 
         with open(captions_file, 'r', encoding='utf-8') as f:
@@ -117,8 +117,12 @@ class AudioTextMelodyDataset(Dataset):
 
         assert len(self.captions) == len(self.audio_files) == len(self.melody_files), "Mismatch in data lengths."
 
+    def __len__(self):
+        # Return the total number of samples in the dataset
+        return len(self.captions)
+
     def __getitem__(self, idx):
-        # Load audio
+        # Implement data fetching logic (unchanged)
         audio_path = os.path.join(self.audio_dir, self.audio_files[idx])
         waveform, sr = torchaudio.load(audio_path)
         if sr != 48000:
@@ -143,7 +147,6 @@ class AudioTextMelodyDataset(Dataset):
         input_ids = text_encoded['input_ids'].squeeze(0)
         attention_mask = text_encoded['attention_mask'].squeeze(0)
 
-        # Compute emotion logits
         with torch.no_grad():
             emotion_encoded = self.emotion_tokenizer(caption, return_tensors='pt').to(self.emotion_model.device)
             emotion_logits = self.emotion_model(**emotion_encoded).logits
@@ -157,8 +160,8 @@ class AudioTextMelodyDataset(Dataset):
             'emotion_logits': emotion_logits.squeeze(0),
         }
 
-
     def extract_melody_tokens(self, melody_path):
+        # Implement melody token extraction (unchanged)
         import pretty_midi
         midi_data = pretty_midi.PrettyMIDI(melody_path)
         notes = []
@@ -182,6 +185,7 @@ class AudioTextMelodyDataset(Dataset):
         pitch_tokens = torch.tensor(pitches, dtype=torch.long)
         duration_tokens = torch.tensor(durations, dtype=torch.long)
         return pitch_tokens, duration_tokens
+
 
 ###############################################
 # Training
