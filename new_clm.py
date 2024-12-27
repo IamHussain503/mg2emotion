@@ -269,9 +269,9 @@ def main():
     clmp_model = CLMPModel(clap_model, melody_encoder, final_dim=512).to(device)
 
     dataset = AudioTextMelodyDataset(
-        audio_dir="/root/m2music/clm_data/audio",
-        melody_dir="/root/m2music/clm_data/melodies",
-        captions_file="/root/m2music/clm_data/captions.txt",
+        audio_dir="/root/m2music/data/audio",
+        melody_dir="/root/m2music/data/melodies",
+        captions_file="/root/m2music/data/captions.txt",
         processor=processor,
         tokenizer=tokenizer
     )
