@@ -100,12 +100,13 @@ class ExtendedContrastiveLoss(nn.Module):
 # Dataset
 ###############################################
 class AudioTextMelodyDataset(Dataset):
-    def __init__(self, audio_dir, melody_dir, captions_file, processor, tokenizer, emotion_tokenizer, max_length=128):
+    def __init__(self, audio_dir, melody_dir, captions_file, processor, tokenizer, emotion_tokenizer, emotion_model, max_length=128):
         self.audio_dir = audio_dir
         self.melody_dir = melody_dir
         self.processor = processor
         self.tokenizer = tokenizer
         self.emotion_tokenizer = emotion_tokenizer
+        self.emotion_model = emotion_model  # Pass model directly
         self.max_length = max_length
 
         with open(captions_file, 'r', encoding='utf-8') as f:
@@ -116,10 +117,8 @@ class AudioTextMelodyDataset(Dataset):
 
         assert len(self.captions) == len(self.audio_files) == len(self.melody_files), "Mismatch in data lengths."
 
-    def __len__(self):
-        return len(self.captions)
-
     def __getitem__(self, idx):
+        # Load audio
         audio_path = os.path.join(self.audio_dir, self.audio_files[idx])
         waveform, sr = torchaudio.load(audio_path)
         if sr != 48000:
@@ -144,8 +143,10 @@ class AudioTextMelodyDataset(Dataset):
         input_ids = text_encoded['input_ids'].squeeze(0)
         attention_mask = text_encoded['attention_mask'].squeeze(0)
 
-        emotion_encoded = self.emotion_tokenizer(caption, return_tensors='pt')
-        emotion_logits = emotion_model(**emotion_encoded).logits
+        # Compute emotion logits
+        with torch.no_grad():
+            emotion_encoded = self.emotion_tokenizer(caption, return_tensors='pt').to(self.emotion_model.device)
+            emotion_logits = self.emotion_model(**emotion_encoded).logits
 
         return {
             'audio_features': audio_features,
@@ -155,6 +156,7 @@ class AudioTextMelodyDataset(Dataset):
             'duration_tokens': duration_tokens,
             'emotion_logits': emotion_logits.squeeze(0),
         }
+
 
     def extract_melody_tokens(self, melody_path):
         import pretty_midi
@@ -229,7 +231,7 @@ def main():
         tokenizer=tokenizer,
         emotion_tokenizer=emotion_tokenizer
     )
-    dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=2, pin_memory=True)
 
     criterion = ExtendedContrastiveLoss(temperature=0.07)
     optimizer = torch.optim.AdamW(clmp_model.parameters(), lr=3e-4)
