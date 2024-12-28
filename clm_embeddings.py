@@ -148,6 +148,8 @@ class CLaMP(nn.Module):
         return combined_embeddings
 
 # Main Function
+from tqdm import tqdm  # Import tqdm for progress bar
+
 def main():
     parser = argparse.ArgumentParser(description="Batch Embeddings Extraction")
     parser.add_argument('--audio_path', type=str, required=True, help='Path to directory of .wav files')
@@ -196,7 +198,7 @@ def main():
     embedding_dim = 512
 
     with torch.no_grad():
-        for batch in dataloader:
+        for batch in tqdm(dataloader, desc="Processing Batches", unit="batch"):
             batch = {k: v.to(device) for k, v in batch.items()}
             embeddings = model(batch)  # (B, 2048)
 
@@ -223,6 +225,7 @@ def main():
     np.save(os.path.join(args.output_dir, "emotion_embeddings.npy"), emotion_embeddings)
 
     print("Embeddings saved successfully!")
+
 
 if __name__ == '__main__':
     mp.set_start_method("spawn", force=True)
