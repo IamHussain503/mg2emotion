@@ -256,43 +256,9 @@ import numpy as np
 import faiss
 import time
 import os
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
 
-def get_emotion_embeddings(captions):
-    inputs = emotion_tokenizer(captions, return_tensors="pt", padding=True, truncation=True)
-    with torch.no_grad():
-        outputs = emotion_model(**inputs)
-    return outputs.logits.numpy()
-
-# Assume emotion_embeddings and melody_embeddings are precomputed
-def build_emotion_to_melody_index(emotion_embeddings, melody_embeddings, M=32, efConstruction=128):
-    assert emotion_embeddings.shape[0] == melody_embeddings.shape[0], "Mismatch in data lengths!"
-    # Concatenate emotion and melody embeddings (or use mapping)
-    combined_data = np.concatenate((emotion_embeddings, melody_embeddings), axis=1)
-
-    # Build the HNSW index
-    index = faiss.IndexHNSWFlat(combined_data.shape[1], M)
-    index.hnsw.efConstruction = efConstruction
-    index.add(combined_data)
-    return index
-
-def query_emotion_to_melody(index, emotion_embedding, k=5):
-    _, melody_indices = index.search(emotion_embedding, k)
-    return melody_indices
-
+# Build HNSW index
 def build_hnsw_index(data, M=32, efConstruction=128):
-    """
-    Build HNSW index.
-
-    Args:
-        data (np.ndarray): Dataset with shape (n_samples, d).
-        M (int): Number of connections in HNSW.
-        efConstruction (int): ef parameter during construction.
-
-    Returns:
-        faiss.IndexHNSWFlat: Built HNSW index.
-    """
     d = data.shape[1]
     index = faiss.IndexHNSWFlat(d, M)
     index.hnsw.efConstruction = efConstruction
@@ -304,45 +270,32 @@ def build_hnsw_index(data, M=32, efConstruction=128):
     print(f"HNSW index construction time: {end_time - start_time:.2f} seconds")
     return index
 
-def evaluate_index(audio_index, melody_index, audio_queries, k=1):
-    """
-    Evaluate index performance.
+# Build emotion-to-melody HNSW index
+def build_emotion_to_melody_index(emotion_embeddings, melody_embeddings, M=32, efConstruction=128):
+    assert emotion_embeddings.shape[0] == melody_embeddings.shape[0], "Mismatch in data lengths!"
+    combined_data = np.concatenate((emotion_embeddings, melody_embeddings), axis=1)
+    return build_hnsw_index(combined_data, M=M, efConstruction=efConstruction)
 
-    Args:
-        audio_index (faiss.Index): Audio index.
-        melody_index (faiss.Index): Melody index.
-        audio_queries (np.ndarray): Query vectors with shape (n_queries, d).
-        k (int): Number of nearest neighbors.
-
-    Returns:
-        dict: Evaluation results with search times.
-    """
-    # Evaluate audio to audio query
+# Evaluate indexes
+def evaluate_index(audio_index, melody_index, audio_queries, emotion_queries, k=1):
     audio_to_audio_start_time = time.time()
-    _, _ = audio_index.search(audio_queries, k)
+    _, _ = audio_index.search(audio_queries, k)  # Validate audio queries
     audio_to_audio_search_time = time.time() - audio_to_audio_start_time
 
-    # Evaluate audio to melody query
-    audio_to_melody_start_time = time.time()
-    _, _ = melody_index.search(audio_queries, k)
-    audio_to_melody_search_time = time.time() - audio_to_melody_start_time
+    emotion_to_melody_start_time = time.time()
+    combined_queries = np.concatenate((emotion_queries, audio_queries), axis=1)  # Combine emotion and audio for melody validation
+    _, _ = melody_index.search(combined_queries, k)
+    emotion_to_melody_search_time = time.time() - emotion_to_melody_start_time
 
     return {
         'k': k,
         'audio_to_audio_search_time': audio_to_audio_search_time,
-        'audio_to_melody_search_time': audio_to_melody_search_time,
+        'emotion_to_melody_search_time': emotion_to_melody_search_time,
     }
 
+# Save FAISS index
 def save_index(index, index_path):
-    """
-    Save FAISS index to specified path.
-
-    Args:
-        index (faiss.Index): Index to save.
-        index_path (str): File path to save the index.
-    """
-    directory = os.path.dirname(index_path)
-    os.makedirs(directory, exist_ok=True)  # Ensure the directory exists
+    os.makedirs(os.path.dirname(index_path), exist_ok=True)
     faiss.write_index(index, index_path)
     print(f"Index saved to: {index_path}")
 
@@ -362,36 +315,31 @@ if __name__ == "__main__":
     efConstruction = 80
     k = 1
 
+    # Build indexes
     print("Building emotion-to-melody HNSW index...")
     emotion_to_melody_index = build_emotion_to_melody_index(emotion_data, melody_data, M=M, efConstruction=efConstruction)
 
     print("Building audio HNSW index...")
     audio_index = build_hnsw_index(audio_data, M=M, efConstruction=efConstruction)
 
-    index_info = f"HNSW, M: {M}, efConstruction: {efConstruction}"
-    file_suffix = "hnsw"
-
-    # Concatenate emotion data and audio queries for validation
-    combined_queries = np.concatenate((emotion_data, audio_queries), axis=1)
-    print(f"Shape of combined_queries: {combined_queries.shape}")
-
-    # Run validation
+    # Validation
     print(f"Running validation with k={k}...")
-    validation_result = evaluate_index(audio_index, emotion_to_melody_index, combined_queries, k=k)
+    validation_result = evaluate_index(audio_index, emotion_to_melody_index, audio_queries, emotion_data, k=k)
 
     # Output validation results
-    print(f"\nIndex type: {index_info}, k: {k}")
+    print(f"\nValidation Results:")
     print(f"Audio to audio search time: {validation_result['audio_to_audio_search_time']:.6f} seconds")
-    print(f"Audio to melody search time: {validation_result['audio_to_melody_search_time']:.6f} seconds")
+    print(f"Emotion to melody search time: {validation_result['emotion_to_melody_search_time']:.6f} seconds")
 
-    # Save index
+    # Save indexes
     save_path = '/root/mg2emotion/data/faiss'
 
-    emotion_to_melody_index_path = os.path.join(save_path, f'emotion_to_melody_{file_suffix}.faiss')
+    emotion_to_melody_index_path = os.path.join(save_path, 'emotion_to_melody_hnsw.faiss')
     print("Saving emotion-to-melody HNSW index...")
     save_index(emotion_to_melody_index, emotion_to_melody_index_path)
 
-    audio_index_path = os.path.join(save_path, f'audio_2_audio_{file_suffix}.faiss')
+    audio_index_path = os.path.join(save_path, 'audio_hnsw.faiss')
     print("Saving audio HNSW index...")
     save_index(audio_index, audio_index_path)
+
 
