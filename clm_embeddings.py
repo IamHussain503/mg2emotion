@@ -7,6 +7,7 @@ import torch.nn as nn
 from transformers import AutoModel, AutoProcessor, AutoTokenizer, AutoModelForSequenceClassification
 from torch.utils.data import Dataset, DataLoader
 import argparse
+import torch.multiprocessing as mp
 
 # Dataset Class
 class AudioTextMelodyDataset(Dataset):
@@ -65,9 +66,9 @@ class AudioTextMelodyDataset(Dataset):
         input_ids = text_tokens['input_ids'].squeeze(0)
         attention_mask = text_tokens['attention_mask'].squeeze(0)
 
-        # Emotion
+        # Generate emotion logits
         with torch.no_grad():
-            emotion_inputs = self.emotion_tokenizer(caption, return_tensors="pt", truncation=True, padding="max_length")
+            emotion_inputs = self.emotion_tokenizer(caption, return_tensors="pt", truncation=True, padding="max_length").to(self.emotion_model.device)
             emotion_logits = self.emotion_model(**emotion_inputs).logits.squeeze(0)
 
         return {
@@ -224,4 +225,5 @@ def main():
     print("Embeddings saved successfully!")
 
 if __name__ == '__main__':
+    mp.set_start_method("spawn", force=True)
     main()
