@@ -252,7 +252,6 @@
 #     print("Saving audio HNSW index...")
 #     save_index(audio_index, audio_index_path)
 
-
 import numpy as np
 import faiss
 import time
@@ -372,9 +371,13 @@ if __name__ == "__main__":
     index_info = f"HNSW, M: {M}, efConstruction: {efConstruction}"
     file_suffix = "hnsw"
 
+    # Concatenate emotion data and audio queries for validation
+    combined_queries = np.concatenate((emotion_data, audio_queries), axis=1)
+    print(f"Shape of combined_queries: {combined_queries.shape}")
+
     # Run validation
     print(f"Running validation with k={k}...")
-    validation_result = evaluate_index(audio_index, emotion_to_melody_index, audio_queries, k=k)
+    validation_result = evaluate_index(audio_index, emotion_to_melody_index, combined_queries, k=k)
 
     # Output validation results
     print(f"\nIndex type: {index_info}, k: {k}")
@@ -391,3 +394,4 @@ if __name__ == "__main__":
     audio_index_path = os.path.join(save_path, f'audio_2_audio_{file_suffix}.faiss')
     print("Saving audio HNSW index...")
     save_index(audio_index, audio_index_path)
+
