@@ -355,7 +355,7 @@ if __name__ == "__main__":
     print("audio_data loaded")
     audio_queries = np.load('/root/mg2emotion/data/text_embeddings.npy')
     print("audio_queries loaded")
-    emotion_data = np.load('/root/mg2emotion/data/emotions_embeddings.npy')
+    emotion_data = np.load('/root/mg2emotion/data/emotion_embeddings.npy')
     print("emotion_data loaded")
 
     # HNSW parameters
