@@ -351,7 +351,7 @@ if __name__ == "__main__":
     # Load data
     melody_data = np.load('/root/mg2emotion/data/melody_embeddings.npy')
     print("melody_data loaded")
-    audio_data = np.load('//root/mg2emotion/data/audio_embeddings.npy')
+    audio_data = np.load('/root/mg2emotion/data/audio_embeddings.npy')
     print("audio_data loaded")
     audio_queries = np.load('/root/mg2emotion/data/text_embeddings.npy')
     print("audio_queries loaded")
@@ -382,7 +382,7 @@ if __name__ == "__main__":
     print(f"Audio to melody search time: {validation_result['audio_to_melody_search_time']:.6f} seconds")
 
     # Save index
-    save_path = '/root/m2music/data/faiss'
+    save_path = '/root/mg2emotion/data/faiss'
 
     emotion_to_melody_index_path = os.path.join(save_path, f'emotion_to_melody_{file_suffix}.faiss')
     print("Saving emotion-to-melody HNSW index...")
