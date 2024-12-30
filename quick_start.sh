@@ -5,7 +5,7 @@
 
 CONFIG_YAML="MMGen_train/config/quick_start/quick_start.yaml"
 LIST_INFERENCE="tests/captionlist/ChatGPT-4.0_prompt.lst"
-RELOAD_FROM_CKPT="data/checkpoints/mmgen-diffusion-checkpoint.ckpt"
+RELOAD_FROM_CKPT="/root/mg2emotion/logs/latent_diffusion/config/train/checkpoints/checkpoint-fad-133.00-global_step=79999.ckpt"
 
 python3 MMGen_train/infer.py \
     --config_yaml $CONFIG_YAML \
