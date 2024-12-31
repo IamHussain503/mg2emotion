@@ -114,7 +114,7 @@ class DDPM(pl.LightningModule):
         self.sampling_rate = sampling_rate
         self.clap = CLAPAudioEmbeddingClassifierFreev2(
 #            pretrained_path="/root/AudioLDM-training-finetuning/data/checkpoints/clap_music_speech_audioset_epoch_15_esc_89.98.pt",
-            pretrained_path="/root/m2music/data/clm_checkpoint/clmp_epoch_13.pth",
+            pretrained_path="/root/mg2emotion/data/clm_checkpoint/clmp_final.pth",
             sampling_rate=self.sampling_rate,
             embed_mode="audio",
             amodel="HTSAT-base",
@@ -1809,7 +1809,7 @@ class LatentDiffusion(DDPM):
             
             elif type(name) is list:
                 max_filename_length = 30  
-                truncated_basename = self.truncate_filename(os.path.basename(name[0]), max_filename_length)
+                truncated_basename = self.truncate_filename(os.path.basename(name[i]), max_filename_length)
 
                 # path = os.path.join(
                 #     savepath,

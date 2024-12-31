@@ -135,7 +135,7 @@ model:
         conditioning_key: film
         target: MMGen_train.conditional_models.CLAPAudioEmbeddingClassifierFreev2
         params:
-          pretrained_path: /root/m2music/data/clm_checkpoint/clmp_epoch_13.pth
+          pretrained_path: /root/mg2emotion/data/clm_checkpoint/clmp_final.pth
           sampling_rate: 16000
           embed_mode: text # or text
           amodel: HTSAT-base
