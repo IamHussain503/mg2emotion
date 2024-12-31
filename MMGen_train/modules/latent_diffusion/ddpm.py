@@ -1152,6 +1152,7 @@ class LatentDiffusion(DDPM):
     def instantiate_cond_stage(self, config):
         self.cond_stage_model_metadata = {}
         for i, cond_model_key in enumerate(config.keys()):
+            print(f"[DEBUG] Adding {cond_model_key} to cond_stage_model_metadata")
             model = instantiate_from_config(config[cond_model_key])
             self.cond_stage_models.append(model)
             self.cond_stage_model_metadata[cond_model_key] = {
@@ -1172,9 +1173,10 @@ class LatentDiffusion(DDPM):
         return self.scale_factor * z
 
     def get_learned_conditioning(self, c, key, unconditional_cfg):
-        # print("get_learned_conditioning")
-        assert key in self.cond_stage_model_metadata.keys()
-        # print("self.cond stage model metadata", self.cond_stage_model_metadata)
+        print(f"[DEBUG] Key: {key}")
+        print(f"[DEBUG] Available Keys in cond_stage_model_metadata: {self.cond_stage_model_metadata.keys()}")
+
+        assert key in self.cond_stage_model_metadata.keys(), f"Key '{key}' is missing in cond_stage_model_metadata"
 
         # Classifier-free guidance
         if not unconditional_cfg:
@@ -1196,10 +1198,10 @@ class LatentDiffusion(DDPM):
             c = self.cond_stage_models[
                 self.cond_stage_model_metadata[key]["model_idx"]
             ].get_unconditional_condition(batchsize)
-        
-        self.learned_conditioning_history.append(c.detach().cpu().numpy())
 
+        self.learned_conditioning_history.append(c.detach().cpu().numpy())
         return c
+
     
     # def get_input(
     #     self,
