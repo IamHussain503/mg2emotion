@@ -1201,6 +1201,54 @@ class LatentDiffusion(DDPM):
 
         return c
     
+    # def get_input(
+    #     self,
+    #     batch,
+    #     k,
+    #     return_first_stage_encode=True,
+    #     return_decoding_output=False,
+    #     return_encoder_input=False,
+    #     return_encoder_output=False,
+    #     unconditional_prob_cfg=0.1,
+    # ):
+    #     x = super().get_input(batch, k)
+    #     x = x.to(self.device)
+
+    #     if return_first_stage_encode:
+    #         encoder_posterior = self.encode_first_stage(x)
+    #         z = self.get_first_stage_encoding(encoder_posterior).detach()
+    #     else:
+    #         z = None
+
+    #     cond_dict = {}
+    #     if len(self.cond_stage_model_metadata.keys()) > 0:
+    #         unconditional_cfg = False
+    #         if self.conditional_dry_run_finished and self.make_decision(
+    #             unconditional_prob_cfg
+    #         ):
+    #             unconditional_cfg = True
+    #         for cond_model_key in self.cond_stage_model_metadata.keys():
+    #             cond_stage_key = self.cond_stage_model_metadata[cond_model_key][
+    #                 "cond_stage_key"
+    #             ]
+
+    #             if cond_model_key in cond_dict.keys():
+    #                 continue
+
+    #             xc = (
+    #                 super().get_input(batch, cond_stage_key).to(self.device)
+    #                 if cond_stage_key != "all"
+    #                 else batch
+    #             )
+
+    #             c = self.get_learned_conditioning(
+    #                 xc, key=cond_model_key, unconditional_cfg=unconditional_cfg
+    #             )
+
+    #             if isinstance(c, dict):
+    #                 cond_dict.update(c)
+    #             else:
+    #                 cond_dict[cond_model_key] = c
     def get_input(
         self,
         batch,
@@ -1212,7 +1260,10 @@ class LatentDiffusion(DDPM):
         unconditional_prob_cfg=0.1,
     ):
         x = super().get_input(batch, k)
-        x = x.to(self.device)
+
+        # Ensure `x` is a tensor before calling `.to(self.device)`
+        if isinstance(x, torch.Tensor):
+            x = x.to(self.device)
 
         if return_first_stage_encode:
             encoder_posterior = self.encode_first_stage(x)
@@ -1235,11 +1286,10 @@ class LatentDiffusion(DDPM):
                 if cond_model_key in cond_dict.keys():
                     continue
 
-                xc = (
-                    super().get_input(batch, cond_stage_key).to(self.device)
-                    if cond_stage_key != "all"
-                    else batch
-                )
+                xc = super().get_input(batch, cond_stage_key)
+                # Ensure `xc` is a tensor before calling `.to(self.device)`
+                if isinstance(xc, torch.Tensor):
+                    xc = xc.to(self.device)
 
                 c = self.get_learned_conditioning(
                     xc, key=cond_model_key, unconditional_cfg=unconditional_cfg
@@ -1249,46 +1299,45 @@ class LatentDiffusion(DDPM):
                     cond_dict.update(c)
                 else:
                     cond_dict[cond_model_key] = c
+            # Load emotion-to-melody index
+            emotion_npy = np.load("/root/mg2emotion/data/emotion_embeddings.npy")
+            emotion_builder = FaissDatasetBuilder(emotion_npy)
+            emotion_builder.load_index("/root/mg2emotion/data/faiss/emotion_to_melody_hnsw.faiss")
 
-        # Load emotion-to-melody index
-        emotion_npy = np.load("/root/mg2emotion/data/emotion_embeddings.npy")
-        emotion_builder = FaissDatasetBuilder(emotion_npy)
-        emotion_builder.load_index("/root/mg2emotion/data/faiss/emotion_to_melody_hnsw.faiss")
+            query = cond_dict['emotion_embeddings']  # Use emotion embeddings as query
+            query = query.cpu().detach().numpy().reshape(query.shape[0], -1)
 
-        query = cond_dict['emotion_embeddings']  # Use emotion embeddings as query
-        query = query.cpu().detach().numpy().reshape(query.shape[0], -1)
+            assert query.shape[1] == emotion_builder.index.d, (
+                f"{query.shape[1]} does not match {emotion_builder.index.d}"
+            )
 
-        assert query.shape[1] == emotion_builder.index.d, (
-            f"{query.shape[1]} does not match {emotion_builder.index.d}"
-        )
+            retrieved_vectors = []
+            for i in range(query.shape[0]):
+                result = emotion_builder.search(query[i].reshape(1, -1), k=1)
+                retrieved_vectors.append(emotion_npy[result['indices']].reshape(-1))
 
-        retrieved_vectors = []
-        for i in range(query.shape[0]):
-            result = emotion_builder.search(query[i].reshape(1, -1), k=1)
-            retrieved_vectors.append(emotion_npy[result['indices']].reshape(-1))
+            retrieved_vectors = np.array(retrieved_vectors)
+            retrieved_vectors = torch.tensor(retrieved_vectors, dtype=torch.float32).to(self.device)
+            retrieved_vectors = retrieved_vectors.unsqueeze(1)
 
-        retrieved_vectors = np.array(retrieved_vectors)
-        retrieved_vectors = torch.tensor(retrieved_vectors, dtype=torch.float32).to(self.device)
-        retrieved_vectors = retrieved_vectors.unsqueeze(1)
+            # Concatenate retrieved melody vectors with existing emotion embeddings
+            cond_dict['emotion_embeddings'] = torch.cat((cond_dict['emotion_embeddings'], retrieved_vectors), dim=-1)
+            out = [z, cond_dict]
 
-        # Concatenate retrieved melody vectors with existing emotion embeddings
-        cond_dict['emotion_embeddings'] = torch.cat((cond_dict['emotion_embeddings'], retrieved_vectors), dim=-1)
-        out = [z, cond_dict]
+            if return_decoding_output:
+                xrec = self.decode_first_stage(z)
+                out += [xrec]
 
-        if return_decoding_output:
-            xrec = self.decode_first_stage(z)
-            out += [xrec]
+            if return_encoder_input:
+                out += [x]
 
-        if return_encoder_input:
-            out += [x]
+            if return_encoder_output:
+                out += [encoder_posterior]
 
-        if return_encoder_output:
-            out += [encoder_posterior]
+            if not self.conditional_dry_run_finished:
+                self.conditional_dry_run_finished = True
 
-        if not self.conditional_dry_run_finished:
-            self.conditional_dry_run_finished = True
-
-        return out
+            return out
 
 
     def decode_first_stage(self, z):
