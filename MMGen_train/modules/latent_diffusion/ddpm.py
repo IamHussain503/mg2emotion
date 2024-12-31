@@ -1157,9 +1157,20 @@ class LatentDiffusion(DDPM):
             self.cond_stage_models.append(model)
             self.cond_stage_model_metadata[cond_model_key] = {
                 "model_idx": i,
-                "cond_stage_key": config[cond_model_key].get("cond_stage_key", ""),
+                "cond_stage_key": config[cond_model_key].get("cond_stage_key", cond_model_key),
                 "conditioning_key": config[cond_model_key].get("conditioning_key", ""),
             }
+
+        # Add 'text' explicitly if not present
+        if "text" not in self.cond_stage_model_metadata:
+            print("[DEBUG] Adding missing 'text' key to cond_stage_model_metadata.")
+            self.cond_stage_model_metadata["text"] = {
+                "model_idx": len(self.cond_stage_models),  # Next available index
+                "cond_stage_key": "text",
+                "conditioning_key": "crossattn",  # Default type for text conditioning
+            }
+            self.cond_stage_models.append(instantiate_from_config(config.get("text", {})))
+
 
 
     def get_first_stage_encoding(self, encoder_posterior):
@@ -1177,32 +1188,21 @@ class LatentDiffusion(DDPM):
         print(f"[DEBUG] Key: {key}")
         print(f"[DEBUG] Available Keys in cond_stage_model_metadata: {self.cond_stage_model_metadata.keys()}")
 
-        if key not in self.cond_stage_model_metadata.keys():
+        if key not in self.cond_stage_model_metadata:
             raise KeyError(
                 f"Key '{key}' is missing in cond_stage_model_metadata. "
                 f"Available keys: {list(self.cond_stage_model_metadata.keys())}"
             )
 
-        # Classifier-free guidance
+        # Proceed with learned conditioning logic
         if not unconditional_cfg:
-            c = self.cond_stage_models[
-                self.cond_stage_model_metadata[key]["model_idx"]
-            ](c)
+            c = self.cond_stage_models[self.cond_stage_model_metadata[key]["model_idx"]](c)
         else:
-            # when the cond_stage_key is "all", pick one random element out
+            # Classifier-free guidance
             if isinstance(c, dict):
                 c = c[list(c.keys())[0]]
-
-            if isinstance(c, torch.Tensor):
-                batchsize = c.size(0)
-            elif isinstance(c, list):
-                batchsize = len(c)
-            else:
-                raise NotImplementedError()
-
-            c = self.cond_stage_models[
-                self.cond_stage_model_metadata[key]["model_idx"]
-            ].get_unconditional_condition(batchsize)
+            batchsize = len(c) if isinstance(c, list) else c.size(0)
+            c = self.cond_stage_models[self.cond_stage_model_metadata[key]["model_idx"]].get_unconditional_condition(batchsize)
 
         self.learned_conditioning_history.append(c.detach().cpu().numpy())
         return c
