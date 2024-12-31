@@ -1152,14 +1152,15 @@ class LatentDiffusion(DDPM):
     def instantiate_cond_stage(self, config):
         self.cond_stage_model_metadata = {}
         for i, cond_model_key in enumerate(config.keys()):
-            print(f"[DEBUG] Adding {cond_model_key} to cond_stage_model_metadata")
+            print(f"[DEBUG] Adding '{cond_model_key}' to cond_stage_model_metadata.")
             model = instantiate_from_config(config[cond_model_key])
             self.cond_stage_models.append(model)
             self.cond_stage_model_metadata[cond_model_key] = {
                 "model_idx": i,
-                "cond_stage_key": config[cond_model_key]["cond_stage_key"],
-                "conditioning_key": config[cond_model_key]["conditioning_key"],
+                "cond_stage_key": config[cond_model_key].get("cond_stage_key", ""),
+                "conditioning_key": config[cond_model_key].get("conditioning_key", ""),
             }
+
 
     def get_first_stage_encoding(self, encoder_posterior):
         if isinstance(encoder_posterior, DiagonalGaussianDistribution):
@@ -1176,7 +1177,11 @@ class LatentDiffusion(DDPM):
         print(f"[DEBUG] Key: {key}")
         print(f"[DEBUG] Available Keys in cond_stage_model_metadata: {self.cond_stage_model_metadata.keys()}")
 
-        assert key in self.cond_stage_model_metadata.keys(), f"Key '{key}' is missing in cond_stage_model_metadata"
+        if key not in self.cond_stage_model_metadata.keys():
+            raise KeyError(
+                f"Key '{key}' is missing in cond_stage_model_metadata. "
+                f"Available keys: {list(self.cond_stage_model_metadata.keys())}"
+            )
 
         # Classifier-free guidance
         if not unconditional_cfg:
@@ -1201,6 +1206,7 @@ class LatentDiffusion(DDPM):
 
         self.learned_conditioning_history.append(c.detach().cpu().numpy())
         return c
+
 
     
     # def get_input(
