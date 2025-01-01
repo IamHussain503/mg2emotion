@@ -1271,7 +1271,7 @@ class LatentDiffusion(DDPM):
                     cond_dict[cond_model_key] = c
         
         # change the melody_npy and melody.faiss to the local path
-        melody_npy = np.load("/root/mg2emotion/data/embeddings/melody_embeddings.npy")
+        melody_npy = np.load("/root/mg2emotion/data/melody_embeddings.npy")
         melody_builder = FaissDatasetBuilder(melody_npy)
         melody_builder.load_index("/root/mg2emotion/data/faiss/emotion_to_melody_hnsw.faiss")
         # change the melody_npy and melody.faiss to the local path
