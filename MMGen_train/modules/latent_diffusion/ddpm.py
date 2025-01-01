@@ -1279,7 +1279,7 @@ class LatentDiffusion(DDPM):
         query = cond_dict['film_clap_cond1']
         query = query.cpu().detach().numpy()
         print("this is the shape of query============== ", query.shape, "this is melody bulider =============== ",melody_builder.index.d)
-        query = query.reshape(query.shape[0], -1)
+        query = query.reshape(query.shape[0], -1).reshape(4,1024)
         print("this is the shape of query============== ", query.shape, "this is melody bulider =============== ",melody_builder.index.d)
 
         assert query.shape[1] == melody_builder.index.d, f" {query.shape[1]} don't matched {melody_builder.index.d} "
