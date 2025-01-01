@@ -113,8 +113,7 @@ class DDPM(pl.LightningModule):
         self.first_stage_key = first_stage_key
         self.sampling_rate = sampling_rate
         self.clap = CLAPAudioEmbeddingClassifierFreev2(
-#            pretrained_path="/root/AudioLDM-training-finetuning/data/checkpoints/clap_music_speech_audioset_epoch_15_esc_89.98.pt",
-            pretrained_path="/root/mg2emotion/data/clm_checkpoint/clmp_final.pth",
+            pretrained_path="/root/m2music/data/clm_checkpoint/clmp_epoch_13.pth",
             sampling_rate=self.sampling_rate,
             embed_mode="audio",
             amodel="HTSAT-base",
@@ -1152,26 +1151,13 @@ class LatentDiffusion(DDPM):
     def instantiate_cond_stage(self, config):
         self.cond_stage_model_metadata = {}
         for i, cond_model_key in enumerate(config.keys()):
-            print(f"[DEBUG] Adding '{cond_model_key}' to cond_stage_model_metadata.")
             model = instantiate_from_config(config[cond_model_key])
             self.cond_stage_models.append(model)
             self.cond_stage_model_metadata[cond_model_key] = {
                 "model_idx": i,
-                "cond_stage_key": config[cond_model_key].get("cond_stage_key", cond_model_key),
-                "conditioning_key": config[cond_model_key].get("conditioning_key", ""),
+                "cond_stage_key": config[cond_model_key]["cond_stage_key"],
+                "conditioning_key": config[cond_model_key]["conditioning_key"],
             }
-
-        # Add 'text' explicitly if not present
-        if "text" not in self.cond_stage_model_metadata:
-            print("[DEBUG] Adding missing 'text' key to cond_stage_model_metadata.")
-            self.cond_stage_model_metadata["text"] = {
-                "model_idx": len(self.cond_stage_models),  # Next available index
-                "cond_stage_key": "text",
-                "conditioning_key": "crossattn",  # Default type for text conditioning
-            }
-            self.cond_stage_models.append(instantiate_from_config(config.get("text", {})))
-
-
 
     def get_first_stage_encoding(self, encoder_posterior):
         if isinstance(encoder_posterior, DiagonalGaussianDistribution):
@@ -1185,79 +1171,35 @@ class LatentDiffusion(DDPM):
         return self.scale_factor * z
 
     def get_learned_conditioning(self, c, key, unconditional_cfg):
-        print(f"[DEBUG] Key: {key}")
-        print(f"[DEBUG] Available Keys in cond_stage_model_metadata: {self.cond_stage_model_metadata.keys()}")
+        # print("get_learned_conditioning")
+        assert key in self.cond_stage_model_metadata.keys()
+        # print("self.cond stage model metadata", self.cond_stage_model_metadata)
 
-        if key not in self.cond_stage_model_metadata:
-            raise KeyError(
-                f"Key '{key}' is missing in cond_stage_model_metadata. "
-                f"Available keys: {list(self.cond_stage_model_metadata.keys())}"
-            )
-
-        # Proceed with learned conditioning logic
+        # Classifier-free guidance
         if not unconditional_cfg:
-            c = self.cond_stage_models[self.cond_stage_model_metadata[key]["model_idx"]](c)
+            c = self.cond_stage_models[
+                self.cond_stage_model_metadata[key]["model_idx"]
+            ](c)
         else:
-            # Classifier-free guidance
+            # when the cond_stage_key is "all", pick one random element out
             if isinstance(c, dict):
                 c = c[list(c.keys())[0]]
-            batchsize = len(c) if isinstance(c, list) else c.size(0)
-            c = self.cond_stage_models[self.cond_stage_model_metadata[key]["model_idx"]].get_unconditional_condition(batchsize)
 
+            if isinstance(c, torch.Tensor):
+                batchsize = c.size(0)
+            elif isinstance(c, list):
+                batchsize = len(c)
+            else:
+                raise NotImplementedError()
+
+            c = self.cond_stage_models[
+                self.cond_stage_model_metadata[key]["model_idx"]
+            ].get_unconditional_condition(batchsize)
+        
         self.learned_conditioning_history.append(c.detach().cpu().numpy())
+
         return c
-
-
     
-    # def get_input(
-    #     self,
-    #     batch,
-    #     k,
-    #     return_first_stage_encode=True,
-    #     return_decoding_output=False,
-    #     return_encoder_input=False,
-    #     return_encoder_output=False,
-    #     unconditional_prob_cfg=0.1,
-    # ):
-    #     x = super().get_input(batch, k)
-    #     x = x.to(self.device)
-
-    #     if return_first_stage_encode:
-    #         encoder_posterior = self.encode_first_stage(x)
-    #         z = self.get_first_stage_encoding(encoder_posterior).detach()
-    #     else:
-    #         z = None
-
-    #     cond_dict = {}
-    #     if len(self.cond_stage_model_metadata.keys()) > 0:
-    #         unconditional_cfg = False
-    #         if self.conditional_dry_run_finished and self.make_decision(
-    #             unconditional_prob_cfg
-    #         ):
-    #             unconditional_cfg = True
-    #         for cond_model_key in self.cond_stage_model_metadata.keys():
-    #             cond_stage_key = self.cond_stage_model_metadata[cond_model_key][
-    #                 "cond_stage_key"
-    #             ]
-
-    #             if cond_model_key in cond_dict.keys():
-    #                 continue
-
-    #             xc = (
-    #                 super().get_input(batch, cond_stage_key).to(self.device)
-    #                 if cond_stage_key != "all"
-    #                 else batch
-    #             )
-
-    #             c = self.get_learned_conditioning(
-    #                 xc, key=cond_model_key, unconditional_cfg=unconditional_cfg
-    #             )
-
-    #             if isinstance(c, dict):
-    #                 cond_dict.update(c)
-    #             else:
-    #                 cond_dict[cond_model_key] = c
-
     def get_input(
         self,
         batch,
@@ -1270,12 +1212,7 @@ class LatentDiffusion(DDPM):
     ):
         x = super().get_input(batch, k)
 
-        # Ensure `x` is a tensor before calling `.to(self.device)`
-        if isinstance(x, torch.Tensor):
-            x = x.to(self.device)
-        else:
-            print(f"[DEBUG] 'x' is not a tensor. Type: {type(x)}. Value: {x}")
-
+        x = x.to(self.device)
         if return_first_stage_encode:
             encoder_posterior = self.encode_first_stage(x)
             z = self.get_first_stage_encoding(encoder_posterior).detach()
@@ -1297,68 +1234,81 @@ class LatentDiffusion(DDPM):
                 if cond_model_key in cond_dict.keys():
                     continue
 
-                xc = super().get_input(batch, cond_stage_key)
-                
-                # Add a debug statement to print the type and value of `xc`
-                if not isinstance(xc, torch.Tensor):
-                    print(f"[DEBUG] 'xc' for key '{cond_stage_key}' is not a tensor. Type: {type(xc)}. Value: {xc}")
+                if not self.training:
+                    if isinstance(
+                        self.cond_stage_models[
+                            self.cond_stage_model_metadata[cond_model_key]["model_idx"]
+                        ],
+                        CLAPAudioEmbeddingClassifierFreev2,
+                    ):
+                        print(
+                            "Warning: CLMP model normally should use text for evaluation"
+                        )
+
+                # The original data for conditioning
+                # If cond_model_key is "all", that means the conditional model need all the information from a batch
+
+                if cond_stage_key != "all":
+                    xc = super().get_input(batch, cond_stage_key)
+                    if type(xc) == torch.Tensor:
+                        xc = xc.to(self.device)
                 else:
-                    print(f"[DEBUG] 'xc' for key '{cond_stage_key}' is a tensor. Shape: {xc.shape}")
+                    xc = batch
 
-                # Ensure `xc` is a tensor before calling `.to(self.device)`
-                if isinstance(xc, torch.Tensor):
-                    xc = xc.to(self.device)
-
+                # if cond_stage_key is "all", xc will be a dictionary containing all keys
+                # Otherwise xc will be an entry of the dictionary
                 c = self.get_learned_conditioning(
-                    xc, key=cond_stage_key, unconditional_cfg=unconditional_cfg
+                    xc, key=cond_model_key, unconditional_cfg=unconditional_cfg
                 )
 
+
+                # cond_dict will be used to condition the diffusion model
+                # If one conditional model return multiple conditioning signal
                 if isinstance(c, dict):
-                    cond_dict.update(c)
+                    for k in c.keys():
+                        cond_dict[k] = c[k]
                 else:
                     cond_dict[cond_model_key] = c
+        
+        # change the melody_npy and melody.faiss to the local path
+        melody_npy = np.load("/root/mg2emotion/data/melody_embeddings.npy")
+        melody_builder = FaissDatasetBuilder(melody_npy)
+        melody_builder.load_index("/root/mg2emotion/data/faiss/emotion_to_melody_hnsw.faiss")
+        # change the melody_npy and melody.faiss to the local path
+        
+        query = cond_dict['film_clap_cond1']
+        query = query.cpu().detach().numpy()
+        query = query.reshape(query.shape[0], -1)
 
+        assert query.shape[1] == melody_builder.index.d, f" {query.shape[1]} don't matched {melody_builder.index.d} "
+                
+        retrieved_vectors = []
+        for i in range(query.shape[0]):
+            result = melody_builder.search(query[i].reshape(1, -1), k=1)
+            retrieved_vectors.append(melody_npy[result['indices']].reshape(-1))
 
-            # Load emotion-to-melody index
-            emotion_npy = np.load("/root/mg2emotion/data/emotion_embeddings.npy")
-            emotion_builder = FaissDatasetBuilder(emotion_npy)
-            emotion_builder.load_index("/root/mg2emotion/data/faiss/emotion_to_melody_hnsw.faiss")
+        retrieved_vectors = np.array(retrieved_vectors)
+        retrieved_vectors = torch.tensor(retrieved_vectors, dtype=torch.float32).to(self.device)
+        retrieved_vectors = retrieved_vectors.unsqueeze(1)
 
-            query = cond_dict['emotion_embeddings']  # Use emotion embeddings as query
-            query = query.cpu().detach().numpy().reshape(query.shape[0], -1)
+        cond_dict['film_clap_cond1'] = torch.cat((cond_dict['film_clap_cond1'], retrieved_vectors), dim=-1)
+        out = [z, cond_dict]
 
-            assert query.shape[1] == emotion_builder.index.d, (
-                f"{query.shape[1]} does not match {emotion_builder.index.d}"
-            )
+        if return_decoding_output:
+            xrec = self.decode_first_stage(z)
+            out += [xrec]
 
-            retrieved_vectors = []
-            for i in range(query.shape[0]):
-                result = emotion_builder.search(query[i].reshape(1, -1), k=1)
-                retrieved_vectors.append(emotion_npy[result['indices']].reshape(-1))
+        if return_encoder_input:
+            out += [x]
 
-            retrieved_vectors = np.array(retrieved_vectors)
-            retrieved_vectors = torch.tensor(retrieved_vectors, dtype=torch.float32).to(self.device)
-            retrieved_vectors = retrieved_vectors.unsqueeze(1)
+        if return_encoder_output:
+            out += [encoder_posterior]
 
-            # Concatenate retrieved melody vectors with existing emotion embeddings
-            cond_dict['emotion_embeddings'] = torch.cat((cond_dict['emotion_embeddings'], retrieved_vectors), dim=-1)
-            out = [z, cond_dict]
-
-            if return_decoding_output:
-                xrec = self.decode_first_stage(z)
-                out += [xrec]
-
-            if return_encoder_input:
-                out += [x]
-
-            if return_encoder_output:
-                out += [encoder_posterior]
-
-            if not self.conditional_dry_run_finished:
-                self.conditional_dry_run_finished = True
-
-            return out
-
+        if not self.conditional_dry_run_finished:
+            self.conditional_dry_run_finished = True
+        
+        # Output is a dictionary, where the value could only be tensor or tuple
+        return out
 
     def decode_first_stage(self, z):
         with torch.no_grad():
@@ -1410,76 +1360,53 @@ class LatentDiffusion(DDPM):
             )
 
         return new_cond_dict
-    
-    def process_emotion_embeddings(self, emotion_embeddings):
-        """
-        Process emotion embeddings (e.g., projection or scaling).
-        Args:
-            emotion_embeddings (torch.Tensor): Raw emotion embeddings.
-        Returns:
-            torch.Tensor: Processed emotion embeddings.
-        """
-        # Example: Apply a linear projection or normalization
-        if hasattr(self, 'emotion_proj'):  # Check if a projection layer exists
-            return self.emotion_proj(emotion_embeddings)
-        return emotion_embeddings  # Return as-is if no processing required
-
 
     def shared_step(self, batch, **kwargs):
+        # self.check_module_param_update()
+
         if self.training:
             # Classifier-free guidance
             unconditional_prob_cfg = self.unconditional_prob_cfg
         else:
-            unconditional_prob_cfg = 0.0  # Default during evaluation
+            unconditional_prob_cfg = 0.0  # TODO possible bug here
 
-        # Retrieve inputs and conditionings
         x, c = self.get_input(
             batch, self.first_stage_key, unconditional_prob_cfg=unconditional_prob_cfg
         )
 
-        # Extract emotion embeddings if available
-        emotion_embeddings = c.get('emotion_embeddings', None)
-        if emotion_embeddings is not None:
-            # Include emotion embeddings in the conditioning
-            c['emotion_embeddings'] = self.process_emotion_embeddings(emotion_embeddings)
+        # print("shared_step c ", c.keys())
 
-        # Compute loss based on whether parameters are optimized
         if self.optimize_ddpm_parameter:
             loss, loss_dict = self(x, self.filter_useful_cond_dict(c))
         else:
             loss_dict = {}
             loss = None
 
-        # Additional losses from conditional modules
         additional_loss_for_cond_modules = self.extract_possible_loss_in_cond_dict(c)
         assert isinstance(additional_loss_for_cond_modules, dict)
 
-        # Update loss dictionary with additional conditional losses
         loss_dict.update(additional_loss_for_cond_modules)
 
         if len(additional_loss_for_cond_modules.keys()) > 0:
-            for k, v in additional_loss_for_cond_modules.items():
+            for k in additional_loss_for_cond_modules.keys():
                 if loss is None:
-                    loss = v
+                    loss = additional_loss_for_cond_modules[k]
                 else:
-                    loss = loss + v
+                    loss = loss + additional_loss_for_cond_modules[k]
 
-        # Logging optional
-        # for k, v in additional_loss_for_cond_modules.items():
+        # for k,v in additional_loss_for_cond_modules.items():
         #     self.log(
-        #         f"cond_stage/{k}",
+        #         "cond_stage/"+k,
         #         float(v),
         #         prog_bar=True,
         #         logger=True,
         #         on_step=True,
         #         on_epoch=True,
         #     )
-
         if self.training:
-            assert loss is not None  # Ensure loss is computed during training
+            assert loss is not None
 
         return loss, loss_dict
-
 
     def forward(self, x, c, *args, **kwargs):
         t = torch.randint(
@@ -2425,4 +2352,3 @@ class LatentDiffusionVAELearnable(LatentDiffusion):
             on_step=True,
             on_epoch=False,
         )
-
