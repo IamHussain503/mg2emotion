@@ -1281,7 +1281,7 @@ class LatentDiffusion(DDPM):
         print("this is the shape of query============== ", query.shape, "this is melody bulider =============== ",melody_builder.index.d)
         query = query.reshape(query.shape[0], -1)#.reshape(4,1024)
         print("this is the shape of query============== ", query.shape, "this is melody bulider =============== ",melody_builder.index.d)
-
+        print("this is the query =============== ", query.shape)
         assert query.shape[1] == melody_builder.index.d, f" {query.shape[1]} don't matched {melody_builder.index.d} "
                 
         retrieved_vectors = []
