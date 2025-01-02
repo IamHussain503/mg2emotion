@@ -1267,11 +1267,16 @@ class LatentDiffusion(DDPM):
                 if isinstance(c, dict):
                     for k in c.keys():
                         cond_dict[k] = c[k]
+                # ...existing code...
                 else:
                     cond_dict[cond_model_key] = c
-        
-        # change the melody_npy and melody.faiss to the local path
+                
+                # Print all keys in cond_dict
+        print("Keys in cond_dict::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::", cond_dict.keys())
+                
+                # change the melody_npy and melody.faiss to the local path
         melody_npy = np.load("/root/mg2emotion/data/emotion_embeddings.npy")
+                # ...existing code...
         melody_builder = FaissDatasetBuilder(melody_npy)
         melody_builder.load_index("/root/mg2emotion/data/faiss/emotion_to_melody_hnsw.faiss")
         # change the melody_npy and melody.faiss to the local path
