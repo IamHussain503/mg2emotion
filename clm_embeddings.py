@@ -167,7 +167,7 @@ def main():
     emotion_tokenizer = AutoTokenizer.from_pretrained("nateraw/bert-base-uncased-emotion")
     emotion_model = AutoModelForSequenceClassification.from_pretrained("nateraw/bert-base-uncased-emotion").to(device)
 
-    model = CLaMP(clap_model, embedding_dim=256).to(device)
+    model = CLaMP(clap_model, embedding_dim=512).to(device)
 
     # Load checkpoint and remove unexpected keys
     state_dict = torch.load(args.checkpoint, map_location=device)
@@ -210,7 +210,7 @@ def main():
             print(f'melody_emb shape::::::::::::::::::::::::::::::::::::::::::::::::::::::::', melody_emb.shape)
             text_emb = embeddings[:, 2*embedding_dim:3*embedding_dim].cpu().numpy()
             print(f'text_emb shape::::::::::::::::::::::::::::::::::::::::::::::::::::::::', text_emb.shape)
-            emotion_emb = embeddings[:, 3*embedding_dim:].cpu().numpy()
+            emotion_emb = embeddings[:, 3*embedding_dim:3*embedding_dim+embedding_dim].cpu().numpy()
             print(f'emotion_emb shape::::::::::::::::::::::::::::::::::::::::::::::::::::::::', emotion_emb.shape) 
 
 
