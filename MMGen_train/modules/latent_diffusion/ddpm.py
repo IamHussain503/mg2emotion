@@ -1271,9 +1271,13 @@ class LatentDiffusion(DDPM):
                     cond_dict[cond_model_key] = c
         
         # change the melody_npy and melody.faiss to the local path
-        melody_npy = np.load("/root/m2music/data/embeddings/melody_embeddings.npy")
+        # melody_npy = np.load("/root/m2music/data/embeddings/melody_embeddings.npy")
+        melody_npy = np.load("/root/mg2emotion/data/melody_embeddings.npy")
+
         melody_builder = FaissDatasetBuilder(melody_npy)
-        melody_builder.load_index("/root/m2music/data/faiss/audio_2_melody_hnsw.faiss")
+        # melody_builder.load_index("/root/m2music/data/faiss/audio_2_melody_hnsw.faiss")
+        melody_builder.load_index("/root/mg2emotion/data/faiss/emotion_to_melody_hnsw.faiss")
+
         # change the melody_npy and melody.faiss to the local path
         
         query = cond_dict['film_clap_cond1']
@@ -1281,7 +1285,7 @@ class LatentDiffusion(DDPM):
         print("this is the shape of query============== ", query.shape, "this is melody bulider =============== ",melody_builder.index.d)
         query = query.reshape(query.shape[0], -1)#.reshape(4,1024)
         print("this is the shape of query============== ", query.shape, "this is melody bulider =============== ",melody_builder.index.d)
-
+        print("this is the query =============== ", query.shape)
         assert query.shape[1] == melody_builder.index.d, f" {query.shape[1]} don't matched {melody_builder.index.d} "
                 
         retrieved_vectors = []
