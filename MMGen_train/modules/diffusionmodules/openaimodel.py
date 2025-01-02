@@ -874,9 +874,9 @@ class UNetModel(nn.Module):
         # if self.num_classes is not None:
         #     assert y.shape == (x.shape[0],)
         #     emb = emb + self.label_emb(y)
-
+        repeated_y = y.repeat(1, 2)[:, :1024]
         if self.use_extra_film_by_concat:
-            emb = th.cat([emb, self.film_emb(y)], dim=-1)
+            emb = th.cat([emb, self.film_emb(repeated_y)], dim=-1)
 
         h = x.type(self.dtype)
         for module in self.input_blocks:
