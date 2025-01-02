@@ -167,7 +167,7 @@ def main():
     emotion_tokenizer = AutoTokenizer.from_pretrained("nateraw/bert-base-uncased-emotion")
     emotion_model = AutoModelForSequenceClassification.from_pretrained("nateraw/bert-base-uncased-emotion").to(device)
 
-    model = CLaMP(clap_model, embedding_dim=512).to(device)
+    model = CLaMP(clap_model, embedding_dim=256).to(device)
 
     # Load checkpoint and remove unexpected keys
     state_dict = torch.load(args.checkpoint, map_location=device)
