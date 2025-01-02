@@ -273,7 +273,10 @@ def build_hnsw_index(data, M=32, efConstruction=128):
 # Build emotion-to-melody HNSW index
 def build_emotion_to_melody_index(emotion_embeddings, melody_embeddings, M=32, efConstruction=128):
     assert emotion_embeddings.shape[0] == melody_embeddings.shape[0], "Mismatch in data lengths!"
+    print(f"Emotion embeddings shape:::::::::::::::::::::::::::::::::::::: {emotion_embeddings.shape}")  # Expected: (N, 1280)
+    print(f"Melody embeddings shape::::::::::::::::::::::::::::::::::::::: {melody_embeddings.shape}")    # Expected: (N, 512)
     combined_data = np.concatenate((emotion_embeddings, melody_embeddings), axis=1)
+    print(f"Combined data shape::::::::::::::::::::::::::::::::::::::::::: {combined_data.shape}")            # Expected: (N, 1792
     return build_hnsw_index(combined_data, M=M, efConstruction=efConstruction)
 
 # Evaluate indexes
@@ -283,7 +286,8 @@ def evaluate_index(audio_index, melody_index, audio_queries, emotion_queries, k=
     audio_to_audio_search_time = time.time() - audio_to_audio_start_time
 
     emotion_to_melody_start_time = time.time()
-    combined_queries = np.concatenate((emotion_queries, audio_queries), axis=1)  # Combine emotion and audio for melody validation
+    combined_queries = np.concatenate((emotion_queries, audio_queries), axis=1)
+    print(f"combined Query shape::::::::::::::::::::::::::::::::::::::::::::::: {combined_queries.shape}")  # Expected: (batch_size, 1792)
     _, _ = melody_index.search(combined_queries, k)
     emotion_to_melody_search_time = time.time() - emotion_to_melody_start_time
 
@@ -318,7 +322,7 @@ if __name__ == "__main__":
     # Build indexes
     print("Building emotion-to-melody HNSW index...")
     emotion_to_melody_index = build_emotion_to_melody_index(emotion_data, melody_data, M=M, efConstruction=efConstruction)
-
+    print("emotion_to_melody_index built::::::::::::::::::::::::::::::::::::::::::::::::::{emotion_to_melody_index.d}")
     print("Building audio HNSW index...")
     audio_index = build_hnsw_index(audio_data, M=M, efConstruction=efConstruction)
 
