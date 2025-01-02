@@ -201,12 +201,18 @@ def main():
         for batch in tqdm(dataloader, desc="Processing Batches", unit="batch"):
             batch = {k: v.to(device) for k, v in batch.items()}
             embeddings = model(batch)  # (B, 2048)
+            print(f'Embeddings shape::::::::::::::::::::::::::::::::::::::::::::::::::::::::', embeddings.shape)
 
             # Split embeddings
             audio_emb = embeddings[:, :embedding_dim].cpu().numpy()
+            print(f'audio_emb shape::::::::::::::::::::::::::::::::::::::::::::::::::::::::', audio_emb.shape)
             melody_emb = embeddings[:, embedding_dim:2*embedding_dim].cpu().numpy()
+            print(f'melody_emb shape::::::::::::::::::::::::::::::::::::::::::::::::::::::::', melody_emb.shape)
             text_emb = embeddings[:, 2*embedding_dim:3*embedding_dim].cpu().numpy()
+            print(f'text_emb shape::::::::::::::::::::::::::::::::::::::::::::::::::::::::', text_emb.shape)
             emotion_emb = embeddings[:, 3*embedding_dim:].cpu().numpy()
+            print(f'emotion_emb shape::::::::::::::::::::::::::::::::::::::::::::::::::::::::', emotion_emb.shape) 
+
 
             audio_embeddings_list.append(audio_emb)
             melody_embeddings_list.append(melody_emb)
