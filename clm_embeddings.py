@@ -195,7 +195,7 @@ def main():
     text_embeddings_list = []
     emotion_embeddings_list = []
 
-    embedding_dim = 512
+    embedding_dim = 256
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Processing Batches", unit="batch"):
